@@ -13,21 +13,15 @@ def process_text(img):
 
   img = cv2.imread(img,0)
   img=cv2.resize(img,None,fx=2,fy=2,interpolation=cv2.INTER_CUBIC)
-  # Apply dilation and erosion to remove some noise
-
+  # Thresholding
   img = cv2.threshold(img,0,255,cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-  
+  # Apply dilation and erosion to remove some noise
   kernel = np.ones((1, 1), np.uint8)
-
-
   img = cv2.dilate(img, kernel, iterations=1)
   img = cv2.erode(img, kernel, iterations=1)
   # Apply blur to smooth out the edges
-  
-
-  text = pytesseract.image_to_string(img,lang="eng",config="--psm 4")
-
   img = cv2.GaussianBlur(img, (5, 5), 0)
+  text = pytesseract.image_to_string(img,lang="eng",config="--psm 4")
 
   return text
 
@@ -61,9 +55,12 @@ def get_data(img):
   ocr={}
 
   # find the date
-  date_pattern=r"(0[1-9]|[12][0-9]|3[01])[/](0[1-9]|1[012])[/](19|20)\d\d"
-  date=re.search(date_pattern,text).group()
-  ocr['date']=date
+  try:
+    date_pattern=r"(0[1-9]|[12][0-9]|3[01])[/](0[1-9]|1[012])[/](19|20)\d\d"
+    date=re.search(date_pattern,text).group()
+    ocr['date']=date
+  except AttributeError:
+    date="not found"
   
   # define a regular expression that will match line items that include
   # a price component
@@ -90,14 +87,15 @@ def get_data(img):
   for item in items:
     details = item.split()
     name=""
+    quantity,cost=None,None
     for elem in details:
       if check(elem)==None:
         continue
-      elif check(elem)=="quantity":
+      elif (check(elem)=="quantity")and(quantity==None):
         quantity=elem
       elif check(elem)=="name":
         name+=elem
-      else:
+      elif (check(elem)=="cost")and(cost==None):
         cost=elem
     if ("tax" in name)or("Tax" in name):
       tax[name]=cost
@@ -112,12 +110,4 @@ def get_data(img):
   ocr['tax']=tax
 
   return ocr
-
-
-
-
-
-
-
-
 
