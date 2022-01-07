@@ -25,8 +25,9 @@ from telegram.ext import(
   CallbackContext
 )
 from database import db
+from ocr import get_data
 
-API_KEY = os.environ['API_KEY']
+API_KEY = str(os.getenv('API_KEY'))
 bot = telebot.TeleBot(API_KEY)
 
 bot.set_my_commands([
@@ -45,7 +46,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 #states must be int
-NEWBILL, PHOTO, PROCESSING = range(3)
+NEWBILL, PHOTO, PROCESSING, EDITING = range(4)
 
 ######################### FUNCTIONS ##########################
 
@@ -206,6 +207,12 @@ def handle_callback(update, context):
     return
   elif data == 'Finish adding members':
     confirm_items(chat_id)
+    return EDITING
+  elif data.startswith('Edit item '):
+    logger.info("EDIT AN ITEM!")
+    return
+  elif data == 'Add item':
+    logger.info("ADD ITEM!")
     return
   
     
@@ -251,23 +258,55 @@ def add_new_member(chat_id, user, member_list_msg):
 
   print(db) # DEBUGGING
 
-###################### STATE 4 : CONFIRM ITEMS #####################
+###################### CONFIRM ITEMS #####################
 def confirm_items(chat_id):
   '''
     Allows users to edit the items detected from receipt image 
   '''
+
+  # List out all items as inline buttons
+  items = db[chat_id]['item']
+  buttons = []
+  for item in items:
+    row = []
+    logger.info(item['description'])
+    description = str(item['description'])
+    price = str(item['price'])
+    display_message = f'{description} ${price}' 
+    button = InlineKeyboardButton(
+      display_message, 
+      callback_data='Edit item ' + description
+    )
+    row.append(button)
+    buttons.append(row)
+
+  # Add item button
+  buttons.append([InlineKeyboardButton(
+    '➕ Add item',
+    callback_data='Add item'
+  )]
+  )
+
   bot.send_message(
     chat_id=chat_id,
-    text='confirm items'
+    text='Here are your items 🍴 \n\nClick on the item to edit its name or price, or on the ➕ Add item button if we missed any item out!',
+    reply_markup=InlineKeyboardMarkup(buttons)
   )
-  
+
+def edit_item(chat_id):
   return
 
-###################### STATE 5 : SPLIT BILL ##########################
+def add_item(chat_id):
+  return
+  
+
+  
+  
+###################### SPLIT BILL ##########################
 def split_bill(chat_id):
   return 
 
-###################### STATE 6 : CALCULATE ##########################
+###################### CALCULATE ##########################
 def calculate(chat_id):
 
   return ConversationHandler.END
@@ -292,7 +331,8 @@ def main():
     states={
       NEWBILL: [CommandHandler('splitnewbill', callback=splitnewbill)],
       PHOTO: [MessageHandler(Filters.photo, callback=image_handler)],
-      PROCESSING: [MessageHandler(Filters.photo, callback=image_error)]
+      PROCESSING: [MessageHandler(Filters.photo, callback=image_error)],
+      # EDITING: [MessageHandler(Filters.photo, callback=image_error), MessageHandler(Filters.text), callback=]
     },
     fallbacks=[CommandHandler('cancel', cancel)]
   )
@@ -314,5 +354,3 @@ def main():
 if __name__ == '__main__':
   main()
 # bot.infinity_polling()
-
-
