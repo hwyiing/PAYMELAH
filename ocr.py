@@ -1,10 +1,7 @@
 import cv2
 import numpy as np
 import urllib
-#import cv2.imshow
-
 import pytesseract
-# from pytesseract import Output
 import re
 
 
@@ -52,7 +49,7 @@ def check(s):
 def get_data(img):
   text=process_text(img)
   if text.isspace():
-    return "receipt reading failed"
+    return None
   splits = text.splitlines()
   ocr={}
 
@@ -83,7 +80,7 @@ def get_data(img):
       items.append(line)
 
 # go through items and create the dictionary
-  all_items={}
+  all_items=[]
   tax={}
   totals={}
   for item in items:
@@ -104,7 +101,7 @@ def get_data(img):
     elif ("total" in name)or("Total" in name):
       totals[name]=cost
     else:
-      all_items[name] = {'quantity':quantity, 'cost':cost}
+      all_items.append({'quantity':quantity, 'description':name,'price':cost})
 
   # Store the results in the dict
   ocr['item']=all_items
@@ -114,7 +111,7 @@ def get_data(img):
   return ocr
 
 # testing
-normal=r"C:\Users\Rainer\Documents\GitHub\PAYMELAH\user_photo.jpg"
-bad=r"C:\Users\Rainer\Documents\GitHub\PAYMELAH\bad_photo.jpg"
-good=r"C:\Users\Rainer\Documents\GitHub\PAYMELAH\nice_receipt.jpg"
-print(get_data(good))
+# normal=r"user_photo.jpg"
+# bad=r"bad_photo.jpg"
+# good=r"nice_receipt.jpg"
+# print(get_data(good))
