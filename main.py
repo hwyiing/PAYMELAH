@@ -26,10 +26,8 @@ from telegram.ext import(
 )
 from database import db
 
-API_KEY = str(os.getenv('API_KEY'))
+API_KEY = os.environ['API_KEY']
 bot = telebot.TeleBot(API_KEY)
-
-
 
 bot.set_my_commands([
     BotCommand('start', 'Starts the bot'),
@@ -47,7 +45,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 #states must be int
-NEWBILL, PHOTO, PROCESSING, MEMBERS, CONFIRM_ITEMS, SPLIT_BILL, CALCULATE = range(7)
+NEWBILL, PHOTO, PROCESSING = range(3)
+
+######################### FUNCTIONS ##########################
 
 def request_start(chat_id):
   """
@@ -57,28 +57,22 @@ def request_start(chat_id):
     bot.send_message(chat_id=chat_id, text='Please start the bot by sending /start')
   return
 
-
-def image_handler(update: Update, context: CallbackContext):
-  """
-  Helper function to get image of receipt from user
-  """
-  print("Function image_handler() called")
-  user = update.message.from_user
-  photo_file = update.message.photo[-1].get_file()
-  photo_file.download('user_photo.jpg')
-  logger.info("Photo of %s: %s", user.first_name, 'user_photo.jpg')
-  update.message.reply_text(
-      'Image of receipt received! Parsing information...'
-  )
-  return ConversationHandler.END
-
-
+def cancel(update: Update, context: CallbackContext):
+    chat_id = update.message.chat.id
+    if chat_id not in db:
+      request_start(chat_id)
+      return
+    end_message = 'Sorry to see you go! I hope I can help you split the bill someday.'
+    bot.send_message(chat_id=chat_id, text=end_message)
+ 
+    return ConversationHandler.END
+    
+############################ START COMMAND #################
 @bot.message_handler(commands=['start'])
 def start(update: Update, context: CallbackContext):
   """
   Welcome message & configure initial setup
   """
-  # Send start message
   if update.message.chat.type == 'private':
       chat_user = update.message.chat.first_name
   else:
@@ -96,6 +90,69 @@ def start(update: Update, context: CallbackContext):
   # Specify the succeeding state to enter
   return NEWBILL
 
+########################### STATE 0 : NEW BILL ############################
+def splitnewbill(update: Update, context: CallbackContext):
+  chat_id = update.message.chat.id
+  if chat_id not in db:
+      request_start(chat_id)
+      return
+    
+  bot.send_message(
+      chat_id=chat_id,
+      text=
+      "Start by uploading a clear image of your receipt. Ensure that the receipt takes up most of the image, the whole receipt can be seen, and that the background is clear.\n\nNote: Only receipts with standard format (quantity, item description, price) are allowed."
+  )
+  return PHOTO
+
+########################### STATE 1: PHOTO #################
+
+def image_handler(update: Update, context: CallbackContext):
+  """
+  Helper function to get image of receipt from user
+  """
+  print("Function image_handler() called")
+  user = update.message.from_user
+  photo_file = update.message.photo[-1].get_file()
+  photo_file.download('user_photo.jpg')
+  logger.info("Photo of %s: %s", user.first_name, 'user_photo.jpg')
+  update.message.reply_text(
+      'Image of receipt received! Parsing information...'
+  )
+  chat_id = update.message.chat.id
+  processing(chat_id)
+  return PROCESSING 
+
+########################## STATE 2: PROCESSING ####################
+
+def image_error(update: Update, context: CallbackContext):
+  '''
+  If they send another image in processing states
+  '''
+  update.message.reply_text(
+      'Image of receipt already sent! If you wish to cancel this process and use a new receipt instead, please use /cancel, then /splitnewbill to split a new bill.'
+  )
+
+def processing(chat_id):
+  '''
+  Send photo to OCR, retrieve dictionary
+  '''
+
+  ocr_successful = True
+  
+  if ocr_successful:
+    return getAllMembers(chat_id)
+    # return PROCESSING
+  else:
+    bot.send_message(
+      chat_id=chat_id,
+      text="Receipt could not be processed! Please send another image of the receipt and ensure that the image is clear, and that receipt takes up most of the image.",
+    )
+    # stay in photo state
+    return
+  
+
+############################# STATE 3 : MEMBERS ###################
+
 def getAllMembers(chat_id):
   '''
   Displays inline keyboard for users to click on and gets all the members of the party
@@ -103,18 +160,31 @@ def getAllMembers(chat_id):
   '''
 
   buttons = [[]]
+  row_one = []
   display_message = 'Add me as a member! 🙋🏻‍♀️🙋🏻'
   button = InlineKeyboardButton(
     display_message, 
     callback_data='Add new member'
   )
-  buttons[0].append(button)
+  row_one.append(button)
+  buttons.append(row_one)
+
+  row_two = []
+  display_message = 'Done' 
+  button = InlineKeyboardButton(
+    display_message,
+    callback_data='Finish adding members'
+  )
+  row_two.append(button)
+  buttons.append(row_two)
 
   bot.send_message(
     chat_id=chat_id,
     text="Which users should be included in the bill? Those who are splitting the bill, click the button below!\n\nCurrent Members:",
     reply_markup=InlineKeyboardMarkup(buttons)
   )
+
+  return PROCESSING
 
 
 # @bot.callback_query_handler(func=lambda call: True)
@@ -126,14 +196,18 @@ def handle_callback(update, context):
   print("Function handle_callback() called") # DEBUGGING
 
   call = update.callback_query
-  member_list_msg = call.message
+  original_msg = call.message
   chat_id = call.message.chat.id
   user = call.from_user
   data = call.data
   
   if data == 'Add new member':
-    add_new_member(chat_id, user, member_list_msg)
+    add_new_member(chat_id, user, original_msg)
     return
+  elif data == 'Finish adding members':
+    confirm_items(chat_id)
+    return
+  
     
   print(f'{chat_id}: Callback not implemented')
 
@@ -176,37 +250,30 @@ def add_new_member(chat_id, user, member_list_msg):
   member_list_msg.edit_text(text=updated_text, reply_markup=member_list_msg.reply_markup)
 
   print(db) # DEBUGGING
-  
 
-@bot.message_handler(commands=['splitnewbill'])
-def splitnewbill(update: Update, context: CallbackContext):
-  chat_id = update.message.chat.id
-  if chat_id not in db:
-      request_start(chat_id)
-      return
-
-  # STEP 1 : Uploading receipt image
+###################### STATE 4 : CONFIRM ITEMS #####################
+def confirm_items(chat_id):
+  '''
+    Allows users to edit the items detected from receipt image 
+  '''
   bot.send_message(
-      chat_id=chat_id,
-      text=
-      "Start by uploading a clear image of your receipt. Ensure that the receipt takes up most of the image, the whole receipt can be seen, and that the background is clear.\n\nNote: Only receipts with standard format (quantity, item description, price) are allowed."
+    chat_id=chat_id,
+    text='confirm items'
   )
-
-  # STEP 2 : Get all members of the chat
-  getAllMembers(chat_id)
   
-  # STEP 3 : List out all items and their quantities
+  return
 
-  return PHOTO
+###################### STATE 5 : SPLIT BILL ##########################
+def split_bill(chat_id):
+  return 
 
+###################### STATE 6 : CALCULATE ##########################
+def calculate(chat_id):
 
-#Fallback handler, when user inputs '/cancel'
-def cancel(update: Update, context: CallbackContext):
-    chat_id = update.message.chat.id
-    end_message = 'Bye! I hope I can help you split the bill someday.'
-    bot.send_message(chat_id=chat_id, text=end_message)
- 
-    return ConversationHandler.END
+  return ConversationHandler.END
+  
+
+###################### MAIN FUNCTION ##################
 
 def main():
   print("Bot started")
@@ -225,6 +292,7 @@ def main():
     states={
       NEWBILL: [CommandHandler('splitnewbill', callback=splitnewbill)],
       PHOTO: [MessageHandler(Filters.photo, callback=image_handler)],
+      PROCESSING: [MessageHandler(Filters.photo, callback=image_error)]
     },
     fallbacks=[CommandHandler('cancel', cancel)]
   )
