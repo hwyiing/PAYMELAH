@@ -111,5 +111,3 @@ def get_data(img):
 
   return ocr
 
-image=r"C:\Users\Rainer\Desktop\nice_receipt.jpg"
-print(get_data(image))
