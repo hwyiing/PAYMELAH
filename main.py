@@ -1,4 +1,5 @@
 import os
+from numpy.core.arrayprint import _guarded_repr_or_str
 import telebot
 import logging
 from ocr import get_data
@@ -27,7 +28,7 @@ from telegram.ext import(
 from database import db
 from ocr import get_data
 
-API_KEY = str(os.getenv('API_KEY'))
+API_KEY = "5021687305:AAH82QKFwM3_0mx89bo5v8FbuoFfCSsD-5c"#str(os.getenv('API_KEY'))
 bot = telebot.TeleBot(API_KEY)
 
 bot.set_my_commands([
@@ -138,9 +139,11 @@ def processing(chat_id):
   Send photo to OCR, retrieve dictionary
   '''
 
-  ocr_successful = True
+  ocr_successful = get_data(r"user_photo.jpg")
   
-  if ocr_successful:
+  if ocr_successful is not None:
+    global db
+    db = {chat_id:ocr_successful}
     return getAllMembers(chat_id)
     # return PROCESSING
   else:

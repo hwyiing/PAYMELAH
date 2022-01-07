@@ -96,6 +96,9 @@ def get_data(img):
         name+=elem
       elif (check(elem)=="cost")and(cost==None):
         cost=elem
+        if cost[0]=="$":
+          cost=list(cost)[1:]
+          cost="".join(map(str, cost))
     if ("tax" in name)or("Tax" in name):
       tax[name]=cost
     elif ("total" in name)or("Total" in name):

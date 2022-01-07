@@ -10,6 +10,13 @@ db {
   }
 }
 '''
+class database:
+  def __init__(self,db):
+    self.db=db
+  def set_db(self,db):
+    self.db=db
+  def get_db(self):
+    return self.db
 
 db = {
   -786171741 : { # Pegasus on the Fly receipt
@@ -42,6 +49,7 @@ db = {
   }
 }
 
+d = database(db)
 '''
 END RESULT
 'individual_bill' : {
