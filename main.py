@@ -26,7 +26,7 @@ from telegram.ext import(
 )
 from database import db
 
-API_KEY = os.environ['API_KEY']
+API_KEY = str(os.getenv('API_KEY'))
 bot = telebot.TeleBot(API_KEY)
 
 
