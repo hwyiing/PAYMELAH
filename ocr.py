@@ -51,6 +51,8 @@ def check(s):
 
 def get_data(img):
   text=process_text(img)
+  if text.isspace():
+    return "receipt reading failed"
   splits = text.splitlines()
   ocr={}
 
@@ -111,3 +113,8 @@ def get_data(img):
 
   return ocr
 
+# testing
+normal=r"C:\Users\Rainer\Documents\GitHub\PAYMELAH\user_photo.jpg"
+bad=r"C:\Users\Rainer\Documents\GitHub\PAYMELAH\bad_photo.jpg"
+good=r"C:\Users\Rainer\Documents\GitHub\PAYMELAH\nice_receipt.jpg"
+print(get_data(good))
