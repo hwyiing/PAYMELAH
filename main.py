@@ -1,7 +1,6 @@
 import os
 import telebot
 import logging
-from ocr import get_data
 
 from telegram import Update
 
@@ -21,7 +20,7 @@ from telegram.ext import(
   CallbackContext
 )
 from database import db
-#from ocr import get_data
+from ocr import get_data
 
 API_KEY = str(os.getenv('API_KEY'))#"5021687305:AAH82QKFwM3_0mx89bo5v8FbuoFfCSsD-5c"
 bot = telebot.TeleBot(API_KEY)
@@ -545,10 +544,10 @@ def calculate(chat_id):
 
 def help(update, context):
   commands={
-  "/start": "Type this command in chat or select it from the pop out menu to start the bot",
-  "/splitnewbill": "Use this after /start or when prompted to prepare the bot to accept a photo of your receipt",
-  "/cancel": "Use this command when your bill has been successfully split. This puts me to sleep. Use /start to wake me up again",
-  "/help": "Brings this message up for future reference"}
+  "/start": "Type this command in chat or select it from the pop out menu to start the bot.",
+  "/splitnewbill": "Use this after /start or whenever you want to split a new bill. This prepares the bot to accept a photo of your receipt.",
+  "/cancel": "Use this command if you wish to cancel the splitting of your current bill. Use /splitnewbill after cancelling to start a new splitting process.",
+  "/help": "Brings this message up for future reference."}
   
   cmd_list="\n"
   for i in commands:
