@@ -2,7 +2,10 @@ import os
 import telebot
 import logging
 
-from telegram import Update
+from telegram import (
+  Update, 
+  ReplyKeyboardMarkup
+)
 
 from telebot.types import(
     BotCommand,
@@ -41,7 +44,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 #states must be int
-PHOTO, PROCESSING, EDITING, DESCRIPTION, PRICE = range(5)
+PHOTO, PROCESSING, MEMBERS, CONFIRMING, ADDING_DESC, ADDING_PRICE, EDITING_DESC, EDITING_PRICE, ADDING_CFM, EDITING_CFM, DELETING = range(11)
 
 ######################### FUNCTIONS ##########################
 
@@ -100,10 +103,8 @@ def start(update: Update, context: CallbackContext):
 ########################### STATE 0 : NEW BILL ############################
 def splitnewbill(update: Update, context: CallbackContext):
   chat_id = update.message.chat.id
-  if chat_id not in db:
-      request_start(chat_id)
-      return
-    
+  request_start(chat_id)
+      
   bot.send_message(
       chat_id=chat_id,
       text=
@@ -112,15 +113,16 @@ def splitnewbill(update: Update, context: CallbackContext):
   return PHOTO
 
 ########################### STATE 1: PHOTO #################
-
 def image_handler(update: Update, context: CallbackContext):
   """
   Helper function to get image of receipt from user
   """
-  print("Function image_handler() called")
   user = update.message.from_user
+  user_data = context.user_data
   photo_file = update.message.photo[-1].get_file()
   photo_file.download('user_photo.jpg')
+  category = 'Photo Provided'
+  user_data[category] = 'Yes'
   logger.info("Photo of %s: %s", user.first_name, 'user_photo.jpg')
   update.message.reply_text(
       'Image of receipt received! Parsing information...'
@@ -130,21 +132,11 @@ def image_handler(update: Update, context: CallbackContext):
   # return PROCESSING
   return processing(chat_id)
 
-########################## STATE 2: PROCESSING ####################
 
-def image_error(update: Update, context: CallbackContext):
-  '''
-  If they send another image in processing states
-  '''
-  update.message.reply_text(
-      'Image of receipt already sent! If you wish to cancel this process and use a new receipt instead, please use /cancel, then /splitnewbill to split a new bill.'
-  )
-
-def processing(chat_id):
+def ocr_processing(chat_id):
   '''
   Send photo to OCR, retrieve dictionary
   '''
-
   ocr_successful = get_data(r"user_photo.jpg")
   
   if ocr_successful is not None:
@@ -160,6 +152,16 @@ def processing(chat_id):
     db[chat_id] = {}
     # stay in photo state
     return PHOTO
+
+########################## STATE 2: PROCESSING ####################
+
+def image_error(update: Update, context: CallbackContext):
+  '''
+  If they send another image in processing states
+  '''
+  update.message.reply_text(
+      'Image of receipt already sent! If you wish to cancel this process and use a new receipt instead, please use /cancel, then /splitnewbill to split a new bill.'
+  )
   
 
 ####################### MEMBERS ###################
@@ -195,7 +197,102 @@ def getAllMembers(chat_id):
     reply_markup=InlineKeyboardMarkup(buttons)
   )
 
-  return PROCESSING
+######################### CALLBACK QUERY HANDLERS ##############
+
+def membersCallback(update,context):
+  
+  call = update.callback_query
+  original_msg = call.message
+  chat_id = call.message.chat.id
+  user = call.from_user
+  data = call.data
+  
+  if data == 'Add new member':
+    logger.info("Buttons Callback - new member called")
+    add_new_member(chat_id, user, original_msg)
+    return
+  elif data == 'Finish adding members':
+    logger.info("Buttons Callback - finished members")
+    confirm_items(chat_id)
+    return CONFIRMING
+
+def itemsCallback(update, context): 
+  call = update.callback_query
+  original_msg = call.message
+  chat_id = call.message.chat.id
+  user = call.from_user
+  data = call.data
+
+  if data.startswith('Edit item '):
+    item_index = int(data.split(":")[1])
+    # logger.info(db[chat_id]['item'][item_index])
+    context.user_data['item_index'] = item_index
+    edit_item(chat_id, item_index)
+    return EDITING_DESC
+
+  elif data == 'Add item':
+    bot.send_message(chat_id, 'Sorry we missed an item out! What is this new item called? ')
+    return ADDING_DESC
+  
+  elif data == ('Delete item'): 
+    delete_items(chat_id)
+    return DELETING
+
+def deleteCallback(update, context):
+  call = update.callback_query
+  original_msg = call.message
+  chat_id = call.message.chat.id
+  user = call.from_user
+  data = call.data
+
+  if data.startswith('Delete item'):
+    item_index = int(data.split(":")[1])
+    context.user_data['item_index'] = item_index
+    delete_selected(chat_id, item_index)
+
+  return CONFIRMING 
+
+def delete_items(chat_id):
+  '''
+    Allows users to delete the items detected from receipt image 
+  '''
+  logger.info("delete_items() called")
+  items = db[chat_id]['item']
+  buttons = []
+  count = 0
+  for item in items:
+    row = []
+    description = str(item['description'])
+    price = str(item['price'])
+    display_message = f'{description} ${price}' 
+    button = InlineKeyboardButton(
+      display_message, 
+      callback_data='Delete item :' + str(count)
+    )
+    row.append(button)
+    buttons.append(row)
+    count+=1
+  
+  bot_msg= "Here are your items! What would you like to delete?"
+  bot.send_message(
+    chat_id=chat_id,
+    text=bot_msg,
+    reply_markup=InlineKeyboardMarkup(buttons)
+  )
+
+
+def delete_selected(chat_id, item_index):
+  item = db[chat_id]['item'][item_index]
+  item_name = item['description']
+  item_price = item['price']
+  bot.send_message(
+    chat_id,
+    f'You are going to delete {item_name} ${item_price}.'
+  )
+  db[chat_id]['item'].pop(item_index)
+  logger.info(db)
+  confirm_items(chat_id)
+  return CONFIRMING
 
 ######################### CALLBACK QUERY ##############
 # @bot.callback_query_handler(func=lambda call: True)
@@ -212,8 +309,9 @@ def handle_callback(update, context):
   user = call.from_user
   data = call.data
   
-  if data == 'Add new member':
-    add_new_member(chat_id, user, original_msg)
+  if data.startswith('Exclude user from item:'):
+    item_index_str = data.split(":")[1]
+    display_users_for_item(chat_id, int(item_index_str), original_msg)
     return
   elif data == 'Finish adding members':
     confirm_items(chat_id)
@@ -247,39 +345,56 @@ def handle_callback(update, context):
     
   print(f'{chat_id}: Callback not implemented')
 
-########## FUNCTIONS FOR ADDING ITEMS ###########
-def add_item(chat_id):
-  logger.info("add_item() called")
-  input_name(chat_id)
-  return DESCRIPTION
 
-####### STATE 4 : DESCRIPTION ####
-def description(chat_id):
+###################### ADD NEW ITEM INTO DB ################
+def add_description(update: Update, context: CallbackContext):
+  """
+    Receives user input for new item's description
+  """
+  logger.info("add_description() called")
   item_name = update.message.text
   context.user_data['item_name'] = item_name
-  reply_msg = f'Please enter the price for ${item_name}' 
-  update.message.reply_text("Nice! Now, please enter the price for your : ")
-  return PRICE
+  reply_msg = f'Please enter the price for {item_name} : \nPlease type the number only. Eg. To input $5.00, input 5.00!' 
+  update.message.reply_text(reply_msg)
+  return ADDING_PRICE
 
-####### STATE 5 : PRICE #####
-def price(update:Update, context):
+
+def add_price(update:Update, context):
+  """
+    Receives user input for new item's price 
+  """
   item_price = update.message.text
   context.user_data['item_price'] = item_price
-  item_name = context.user_data['']
-  update.message.reply_text("You want to add a new item - ")
+  item_name = context.user_data['item_name']
+  item_message = f'The item is {item_name} with a price of ${item_price}. Type Yes to confirm.'
+  update.message.reply_text(item_message)
 
-  return 
+  return ADDING_CFM
+
+def add_item(update:Update, context):
+  """
+    Receives a confirmation message from user on whether to insert new item
+  """
+  user_reply = update.message.text
+  chat_id = update.message.chat.id
+  item_name = context.user_data['item_name']
+  if (user_reply=='Yes'):
+    item_price = context.user_data['item_price']
+    db[chat_id]['item'].append({'quantity': 1, 'description': item_name, 'price': item_price})
+
+ 
+  else :
+    update.message.reply_text(f'Okay! We will not add {item_name} in')
+  
+  confirm_items(chat_id)
+  return CONFIRMING
 
 ###############################################
-
 
 def add_new_member(chat_id, user, member_list_msg):
   '''
   Adds all members' usernames to db and edits original bot message to display 
   '''
-
-  print("Function add_new_member() called") # DEBUGGING  
-
   username = user.username
   is_user_existing_member = False
 
@@ -311,7 +426,8 @@ def add_new_member(chat_id, user, member_list_msg):
 
   member_list_msg.edit_text(text=updated_text, reply_markup=member_list_msg.reply_markup)
 
-  print(db) # DEBUGGING
+  #print(db) 
+  # DEBUGGING
 
 ###################### CONFIRM ITEMS #####################
 def confirm_items(chat_id):
@@ -322,23 +438,31 @@ def confirm_items(chat_id):
   # List out all items as inline buttons
   items = db[chat_id]['item']
   buttons = []
+  count = 0
   for item in items:
     row = []
-    logger.info(item['description'])
     description = str(item['description'])
     price = str(item['price'])
     display_message = f'{description} ${price}' 
     button = InlineKeyboardButton(
       display_message, 
-      callback_data='Edit item ' + description
+      callback_data='Edit item :' + str(count)
     )
     row.append(button)
     buttons.append(row)
+    count+=1
 
   # Add item button
   buttons.append([InlineKeyboardButton(
     '➕ Add item',
     callback_data='Add item'
+  )]
+  )
+
+  # Delete item button
+  buttons.append([InlineKeyboardButton(
+    'Delete item',
+    callback_data='Delete item'
   )]
   )
 
@@ -355,12 +479,62 @@ def confirm_items(chat_id):
     reply_markup=InlineKeyboardMarkup(buttons)
   )
 
-def edit_item(chat_id, original_msg):
-  # original_msg.edit_reply_markup()
-  return
+def edit_item(chat_id, item_index):
+  logger.info("edit_item() called")
+  item_name = db[chat_id]['item'][item_index]['description']
+  item_price = db[chat_id]['item'][item_index]['price']
+  item_msg = f'Current item is {item_name} with a price of ${item_price}. Type the new name for the item. If you would like to keep it, type skip'
+  bot.send_message(chat_id=chat_id, text=item_msg)
 
+def edit_description(update: Update, context: CallbackContext):
+  """
+    Receives user input to edit the item's description 
+  """
+  logger.info("edit_description() called")
+  chat_id = update.message.chat.id
+  item_index = context.user_data['item_index']
 
+  user_input = update.message.text
+  if (user_input!='Skip' and user_input!='skip'):
+    context.user_data['item_name'] = user_input
+    logger.info(db[chat_id]['item'][item_index])
   
+  else : 
+    context.user_data['item_name'] = db[chat_id]['item'][item_index]['description']
+
+  item_name = context.user_data['item_name']
+  reply_msg = f'Please enter the price for {item_name}.\nPlease type the number only. Eg. To input $5.00, input 5.00!If you would like to keep it, type skip\n' 
+  update.message.reply_text(reply_msg)
+  return EDITING_PRICE
+
+def edit_price(update: Update, context: CallbackContext):
+  """
+    Receives user input to edit the item's description 
+  """
+  logger.info("edit_price() called")
+  chat_id = update.message.chat.id
+  item_index = context.user_data['item_index']
+
+  user_input = update.message.text
+  if (user_input!='Skip' and user_input!='skip'):
+    context.user_data['item_price'] = float(user_input)
+    logger.info(db[chat_id]['item'][item_index])
+  
+  else : 
+    context.user_data['item_price'] = db[chat_id]['item'][item_index]['price']
+
+  item_name = context.user_data['item_name']
+  item_price = context.user_data['item_price']
+
+  db[chat_id]['item'][item_index] = {'quantity':1, 
+  'description':item_name, 'price':item_price}
+  reply_msg = f'The item has been saved as {item_name} with ${item_price}'
+  logger.info(db[chat_id]['item'][item_index]) 
+  update.message.reply_text(reply_msg)
+  confirm_items(chat_id)
+  return CONFIRMING
+
+
   
 ###################### SPLIT BILL ##########################
 def split_bill(chat_id, original_message_id):
@@ -594,17 +768,21 @@ def main():
     states={
       PHOTO: [MessageHandler(Filters.photo, callback=image_handler)],
       PROCESSING: [MessageHandler(Filters.photo, callback=image_error)],
-      # EDITING: [MessageHandler(Filters.photo, callback=image_error), MessageHandler(Filters.text), callback=]
-
-      DESCRIPTION: [MessageHandler(Filters.text, callback=description)],
-      PRICE: [MessageHandler(Filters.text, callback=price)]    
-    },
+      MEMBERS: [CallbackQueryHandler(membersCallback)],
+      CONFIRMING:[CallbackQueryHandler(itemsCallback), MessageHandler(Filters.photo, callback=image_error)], 
+      ADDING_DESC: [MessageHandler(Filters.text, callback=add_description),],
+      ADDING_PRICE: [MessageHandler(Filters.text, callback=add_price),],
+      ADDING_CFM: [MessageHandler(Filters.text, callback=add_item),],
+      EDITING_DESC: [MessageHandler(Filters.text, callback=edit_description)],
+      EDITING_PRICE: [MessageHandler(Filters.text, callback=edit_price),],
+      DELETING: [CallbackQueryHandler(deleteCallback), MessageHandler(Filters.photo, callback=image_error)],
+      },
+      
     fallbacks=[CommandHandler('cancel', cancel)]
   )
 
  #Attach the conversation handler to the dispatcher
   dp.add_handler(conv_handler)
-
   dp.add_handler(CallbackQueryHandler(handle_callback))
   dp.add_handler(CommandHandler('start', start))
   dp.add_handler(CommandHandler('help', help))
