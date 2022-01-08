@@ -29,8 +29,10 @@ The biggest challenge we ran into was the variety of receipt formats there are. 
 Integrating different libraries into our system was challenging as well, as we had to connect our Telegram bot frontend with our OCR processing backend. 
 
 ## Accomplishments that we're proud of
+We are most proud of the fact that we managed to develop a working telegram bot in less than 24 hours that stays true to our objective. Despite having no prior experience working with both the Telegram bot API and pyTesseract, we were able to hunker down and navigate our way through the extensive documentation for both libraries and construct the payMElah bot. The usage of specific functions like InlineKeyboardButtons and callback handlers were new to all of us, and proved to be an enriching and rewarding experience when they worked as intended. pyTesseract seemed daunting at the beginning, but with the help of numerous tutorials and experimentation, we were able to both process images and extract data smoothly. Towards the end of the hackathon, the feeling we got when we were able to merge both these technologies together seamlessly was one unlike any other.
 
 ## What we learned
+We learned how to construct a working Telegram bot using the telebot API and utilize the multiple functions to generate a smooth flow of sequences for optimal user experience. Thanks to this hackathon, we now have a firm grasp of the how the telebot API works and are confident that we can both continue development of payMElah bot or even embark on a new telebot project. We also learnt some image processing techniques and the importance of data preprocessing when working with "wild" data. The techniques used in this hackathon were mainly used to reduce noise in the images as well as making lines more defined through thresholding for better performance.
 
 ## What's next for payMElah telebot
 1. Given more time, we could extend our bot to accept images of receipts of a more complicated format. To handle such receipts, we could improve the accuracy of our OCR AI backend by training it on the dataset of labelled receipt images.
