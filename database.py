@@ -12,7 +12,7 @@ db {
 '''
 
 db = {
-  -786171741 : { # Pegasus on the Fly receipt
+  44029527 : { # Pegasus on the Fly receipt
     'item' : [
       { # item 1
         'quantity' : 1,
