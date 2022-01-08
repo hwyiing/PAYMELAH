@@ -103,7 +103,7 @@ def get_data(img):
     if ("tax" in name)or("Tax" in name):
       tax[name]=cost
     elif ("total" in name)or("Total" in name):
-      if float(cost)>maxTotal: # off the assumption that total always > subtotal
+      if float(cost)>max_total: # off the assumption that total always > subtotal
         max_total=float(cost)
       totals[name]=cost
     else:

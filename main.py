@@ -1,14 +1,9 @@
 import os
-from numpy.core.arrayprint import _guarded_repr_or_str
 import telebot
 import logging
-#from ocr import get_data
+from ocr import get_data
 
 from telegram import Update
-
-#test
-
-#print(get_data("user_photo.jpg"))
 
 from telebot.types import(
     BotCommand,
@@ -28,7 +23,7 @@ from telegram.ext import(
 from database import db
 #from ocr import get_data
 
-API_KEY = "5021687305:AAH82QKFwM3_0mx89bo5v8FbuoFfCSsD-5c"#str(os.getenv('API_KEY'))
+API_KEY = str(os.getenv('API_KEY'))#"5021687305:AAH82QKFwM3_0mx89bo5v8FbuoFfCSsD-5c"
 bot = telebot.TeleBot(API_KEY)
 
 bot.set_my_commands([
@@ -501,7 +496,7 @@ def calculate(chat_id):
   subtotal = 0.0
   items = db[chat_id]['item']
   for item in items:
-    subtotal += item['price']
+    subtotal += float(item['price'])
 
     members_paying = item['members_paying']
     num_members_paying = len(members_paying)
@@ -510,7 +505,7 @@ def calculate(chat_id):
       bot.send_message(chat_id=chat_id, text=f"No one is paying for {item['description']}! Please ensure each item has at least one person paying for it.")
       return split_bill(chat_id)
 
-    amount_per_pax = item['price'] / num_members_paying
+    amount_per_pax = float(item['price']) / num_members_paying
     for member in members_paying:
       db[chat_id]['individual_bill'][member] += amount_per_pax
 
