@@ -2,7 +2,7 @@
 Hack&Roll 2022 : Hackathon Project
 
 ## Video Demo
-https://github.com/hwyiing/PAYMELAH
+https://youtu.be/XIKgpFfUy2g
 
 ## Devpost Link
 https://devpost.com/software/paymelah-telebot
