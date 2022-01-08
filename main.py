@@ -126,8 +126,9 @@ def image_handler(update: Update, context: CallbackContext):
       'Image of receipt received! Parsing information...'
   )
   chat_id = update.message.chat.id
-  processing(chat_id)
-  return PROCESSING 
+  # processing(chat_id)
+  # return PROCESSING
+  return processing(chat_id)
 
 ########################## STATE 2: PROCESSING ####################
 
@@ -156,8 +157,9 @@ def processing(chat_id):
       chat_id=chat_id,
       text="Receipt could not be processed! Please send another image of the receipt and ensure that the image is clear, and that receipt takes up most of the image.",
     )
+    db[chat_id] = {}
     # stay in photo state
-    return
+    return PHOTO
   
 
 ####################### MEMBERS ###################
@@ -236,7 +238,10 @@ def handle_callback(update, context):
     calculate(chat_id)
     return
   elif data == 'Go to items list':
-    split_bill(chat_id)
+    split_bill(chat_id, None)
+    return
+  elif data == 'Back to items list':
+    split_bill(chat_id, original_msg.message_id)
     return
   
     
@@ -358,7 +363,7 @@ def edit_item(chat_id, original_msg):
   
   
 ###################### SPLIT BILL ##########################
-def split_bill(chat_id):
+def split_bill(chat_id, original_message_id):
   '''
   Allows users to exclude specific users from a particular item
   Displays all items as buttons
@@ -403,11 +408,16 @@ def split_bill(chat_id):
   )]
   )
 
-  bot.send_message(
-    chat_id=chat_id,
-    text="Click on each item to specify who ate what! By default, each item is shared between all members.\n\nIf a member did not eat an item, click on the item, then on the member's username to exclude them from that item's cost!",
-    reply_markup=InlineKeyboardMarkup(buttons)
-  )
+  display_text = "Click on each item to specify who ate what! By default, each item is shared between all members.\n\nIf a member did not eat an item, click on the item, then on the member's username to exclude them from that item's cost!"
+
+  if original_message_id is None:
+    bot.send_message(
+      chat_id=chat_id,
+      text=display_text,
+      reply_markup=InlineKeyboardMarkup(buttons)
+    )
+  else:
+    bot.edit_message_text(text=display_text,reply_markup=InlineKeyboardMarkup(buttons), chat_id=chat_id, message_id=original_message_id)
 
   return
 
@@ -448,7 +458,7 @@ def display_users_for_item(chat_id, item_index, original_msg):
   # Back button to go back to item list
   buttons.append([InlineKeyboardButton(
     "Back to items list",
-    callback_data='Go to items list'
+    callback_data='Back to items list'
   )]
   )
   

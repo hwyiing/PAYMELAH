@@ -78,6 +78,9 @@ def get_data(img):
       continue
     else:
       items.append(line)
+  
+  if len(items) == 0:
+    return None
 
 # go through items and create the dictionary
   all_items=[]
