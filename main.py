@@ -2,7 +2,7 @@ import os
 from numpy.core.arrayprint import _guarded_repr_or_str
 import telebot
 import logging
-from ocr import get_data
+#from ocr import get_data
 
 from telegram import Update
 
@@ -26,7 +26,7 @@ from telegram.ext import(
   CallbackContext
 )
 from database import db
-from ocr import get_data
+#from ocr import get_data
 
 API_KEY = "5021687305:AAH82QKFwM3_0mx89bo5v8FbuoFfCSsD-5c"#str(os.getenv('API_KEY'))
 bot = telebot.TeleBot(API_KEY)
@@ -47,7 +47,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 #states must be int
-NEWBILL, PHOTO, PROCESSING, EDITING = range(4)
+PHOTO, PROCESSING, EDITING, DESCRIPTION, PRICE = range(5)
 
 ######################### FUNCTIONS ##########################
 
@@ -60,14 +60,16 @@ def request_start(chat_id):
   return
 
 def cancel(update: Update, context: CallbackContext):
-    chat_id = update.message.chat.id
-    if chat_id not in db:
-      request_start(chat_id)
-      return
-    end_message = 'Sorry to see you go! I hope I can help you split the bill someday.'
-    bot.send_message(chat_id=chat_id, text=end_message)
- 
-    return ConversationHandler.END
+  chat_id = update.message.chat.id
+  if chat_id not in db:
+    request_start(chat_id)
+    return
+
+  end_message = 'Sorry to see you go! I hope I can help you split the bill someday.'
+  db[chat_id] = {} # Clear db for this chat
+
+  bot.send_message(chat_id=chat_id, text=end_message)
+  return ConversationHandler.END
     
 ############################ START COMMAND #################
 @bot.message_handler(commands=['start'])
@@ -84,13 +86,22 @@ def start(update: Update, context: CallbackContext):
   Hey there, {chat_user}! This bot will help you split the bill among your friends.\n\nBegin by sending the command /splitnewbill to upload a receipt and let us split the bill for you!\n\nNote: Only receipts with standard format (quantity, item description, price) are allowed.
   '''
 
-  #initialise the bill
+  # Initialise the bill
   chat_id = update.message.chat.id
-  # db[chat_id] = {} # Comment when DB is preloaded
+  if chat_id in db.keys(): 
+    # if db[chat_id] == {}: # Started the bot but haven't started a new bill
+    start_message = "You have already started the bot!"
+    # else:
+    #   start_message = "You already have an existing bill being processed! If you wish to cancel this process and use a new receipt instead, please use /cancel, then /splitnewbill to split a new bill."
+  else:
+    db[chat_id] = {} # Comment when DB is preloaded
   bot.send_message(chat_id=chat_id, text=start_message)
+
+  print(db) # DEBUGGING
   
+  return
   # Specify the succeeding state to enter
-  return NEWBILL
+  # return NEWBILL
 
 ########################### STATE 0 : NEW BILL ############################
 def splitnewbill(update: Update, context: CallbackContext):
@@ -155,7 +166,7 @@ def processing(chat_id):
     return
   
 
-############################# STATE 3 : MEMBERS ###################
+####################### MEMBERS ###################
 
 def getAllMembers(chat_id):
   '''
@@ -190,7 +201,7 @@ def getAllMembers(chat_id):
 
   return PROCESSING
 
-
+######################### CALLBACK QUERY ##############
 # @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(update, context):
   """
@@ -213,13 +224,55 @@ def handle_callback(update, context):
     return EDITING
   elif data.startswith('Edit item '):
     logger.info("EDIT AN ITEM!")
+    edit_item(chat_id, original_msg)
     return
   elif data == 'Add item':
-    logger.info("ADD ITEM!")
+    add_item(chat_id)
+    return
+  elif data.startswith('Exclude user from item:'):
+    item_index_str = data.split(":")[1]
+    display_users_for_item(chat_id, int(item_index_str), original_msg)
+    return
+  elif data.startswith('Exclude username:'):
+    variables = data.split(":")[1]
+    username, item_index_str = variables.split()
+    exclude_users_from_item(chat_id, int(item_index_str), username, original_msg)
+    return
+  elif data == 'Calculate bill':
+    calculate(chat_id)
+    return
+  elif data == 'Go to items list':
+    split_bill(chat_id)
     return
   
     
   print(f'{chat_id}: Callback not implemented')
+
+########## FUNCTIONS FOR ADDING ITEMS ###########
+def add_item(chat_id):
+  logger.info("add_item() called")
+  input_name(chat_id)
+  return DESCRIPTION
+
+####### STATE 4 : DESCRIPTION ####
+def description(chat_id):
+  item_name = update.message.text
+  context.user_data['item_name'] = item_name
+  reply_msg = f'Please enter the price for ${item_name}' 
+  update.message.reply_text("Nice! Now, please enter the price for your : ")
+  return PRICE
+
+####### STATE 5 : PRICE #####
+def price(update:Update, context):
+  item_price = update.message.text
+  context.user_data['item_price'] = item_price
+  item_name = context.user_data['']
+  update.message.reply_text("You want to add a new item - ")
+
+  return 
+
+###############################################
+
 
 def add_new_member(chat_id, user, member_list_msg):
   '''
@@ -290,30 +343,232 @@ def confirm_items(chat_id):
   )]
   )
 
+  # Done button to move on to splitting the bill
+  buttons.append([InlineKeyboardButton(
+    "Done 👍🏻 All my items are correct!",
+    callback_data='Go to items list'
+  )]
+  )
+
   bot.send_message(
     chat_id=chat_id,
     text='Here are your items 🍴 \n\nClick on the item to edit its name or price, or on the ➕ Add item button if we missed any item out!',
     reply_markup=InlineKeyboardMarkup(buttons)
   )
 
-def edit_item(chat_id):
+def edit_item(chat_id, original_msg):
+  # original_msg.edit_reply_markup()
   return
 
-def add_item(chat_id):
-  return
-  
 
   
   
 ###################### SPLIT BILL ##########################
 def split_bill(chat_id):
+  '''
+  Allows users to exclude specific users from a particular item
+  Displays all items as buttons
+  '''
+
+  # To each item in db for this chat, add a key-value pair
+  # 'members_paying' : [list of usernames of all members]
+  # Assume everyone is paying for everything at first
+  all_items = db[chat_id]['item']
+  all_members = db[chat_id]['individual_bill'].keys()
+  for item in all_items:
+    if 'members_paying' not in item.keys():
+      item['members_paying'] = list(all_members)
+    print(item) # DEBUGGING
+
+  # DEBUGGING
+  print("------------------------")
+  print('DB: ', db)
+  print("------------------------")
+
+  # List out all items as inline buttons
+  items = db[chat_id]['item']
+  buttons = []
+  for item in items:
+    row = []
+    description = str(item['description'])
+    logger.info(items.index(item))
+    index = items.index(item)
+    price = str(item['price'])
+    display_message = f'{description} ${price}' 
+    button = InlineKeyboardButton(
+      display_message, 
+      callback_data='Exclude user from item:' + str(index)
+    )
+    row.append(button)
+    buttons.append(row)
+
+  # Done button to move on to calculating
+  buttons.append([InlineKeyboardButton(
+    "Done 👍🏻 I'm ready to split my bill!",
+    callback_data='Calculate bill'
+  )]
+  )
+
+  bot.send_message(
+    chat_id=chat_id,
+    text="Click on each item to specify who ate what! By default, each item is shared between all members.\n\nIf a member did not eat an item, click on the item, then on the member's username to exclude them from that item's cost!",
+    reply_markup=InlineKeyboardMarkup(buttons)
+  )
+
+  return
+
+def display_users_for_item(chat_id, item_index, original_msg):
+  '''
+  Displays selected item in text
+  Displays all members' usernames as buttons, with users currently paying for the item with a green tick emoji in front
+  '''
+  # # Get item index
+  # item_index = -1
+  # all_items = db[chat_id]['item']
+  # for item in all_items:
+  #   if item['description'] == item_description:
+  #     item_index = all_items.index(item)
+  # print(item_index) # DEBUGGING
+
+  # Get list of all paying members' usernames for that item
+  all_members = db[chat_id]['individual_bill'].keys()
+  all_paying_members = db[chat_id]['item'][item_index]['members_paying']
+  
+  # List out all usernames as inline buttons
+  buttons = []
+  for username in all_members:
+    row = []
+    emoji = '❌ '
+
+    if username in all_paying_members:
+      emoji = '✅ '
+
+    display_text = emoji + username
+    button = InlineKeyboardButton(
+      display_text, 
+      callback_data=f'Exclude username:{username} {item_index}'
+    )
+    row.append(button)
+    buttons.append(row)
+
+  # Back button to go back to item list
+  buttons.append([InlineKeyboardButton(
+    "Back to items list",
+    callback_data='Go to items list'
+  )]
+  )
+  
+  # Update original message's text and inline keyboard buttons
+  item_description = db[chat_id]['item'][item_index]['description']
+  updated_text = f'Selected Item: {item_description}\n\n❌ : User is not paying for this item\n✅ : User is paying for this item'
+  # logger.info(buttons)
+  # logger.info(InlineKeyboardMarkup(buttons))
+  # logger.info(type(InlineKeyboardMarkup(buttons)))
+  # logger.info(original_msg.reply_markup)
+  # logger.info(type(original_msg.reply_markup))
+  bot.edit_message_text(text=updated_text,reply_markup=InlineKeyboardMarkup(buttons), chat_id=chat_id, message_id=original_msg.message_id)
+  # original_msg.edit_text(text=updated_text,reply_markup=InlineKeyboardMarkup(buttons))
+  # # original_msg = original_msg.edit_text(text=updated_text,reply_markup=original_msg.reply_markup)
+  # original_msg.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
+
   return 
+
+def exclude_users_from_item(chat_id, item_index, username, original_msg):
+  '''
+  Adds or removes username from paying members of the item
+  Updates inline keyboard buttons of original message (emoji beside selected username should change)
+  '''
+
+  # Get list of all paying members' usernames for that item
+  all_paying_members = db[chat_id]['item'][item_index]['members_paying']
+
+  if username in all_paying_members: # To remove user from paying members
+    db[chat_id]['item'][item_index]['members_paying'].remove(username)
+  else: # To add user to paying members
+    db[chat_id]['item'][item_index]['members_paying'].append(username)
+
+  return display_users_for_item(chat_id, item_index, original_msg)
 
 ###################### CALCULATE ##########################
 def calculate(chat_id):
+  '''
+  Calculates the amount each person has to pay, using the formula (sum of shares of each item / subtotal) * total
+  '''
+  all_members = db[chat_id]['individual_bill'].keys()
+
+  # Calculate subtotal = sum of prices of all items
+  # Calculate individual bill for each member (excl tax)
+  subtotal = 0.0
+  items = db[chat_id]['item']
+  for item in items:
+    subtotal += item['price']
+
+    members_paying = item['members_paying']
+    num_members_paying = len(members_paying)
+
+    if num_members_paying == 0:
+      bot.send_message(chat_id=chat_id, text=f"No one is paying for {item['description']}! Please ensure each item has at least one person paying for it.")
+      return split_bill(chat_id)
+
+    amount_per_pax = item['price'] / num_members_paying
+    for member in members_paying:
+      db[chat_id]['individual_bill'][member] += amount_per_pax
+
+  # DEBUGGING
+  print("------------------------BEFORE TAX------------------------")
+  print('DB: ', db)
+  print("----------------------------------------------------------\n")
+
+  # Calculate individual bill for each member (incl tax)
+  for member in all_members:
+    percentage = db[chat_id]['individual_bill'][member] / subtotal
+    amount = percentage * db[chat_id]['total']
+    db[chat_id]['individual_bill'][member] = amount
+
+  # DEBUGGING
+  print("------------------------AFTER TAX------------------------")
+  print('DB: ', db)
+  print("----------------------------------------------------------")
+
+  # Send text messages containing final bill and instructions to split new bill
+  text_msg = "Here's the final bill! Please pay your share of the bill 💸\n\n"
+  count = 0
+  for member in all_members:
+    count += 1
+    amount = round(db[chat_id]['individual_bill'][member], 2)
+    text_msg += f'{count}. {member} - ${amount}\n'
+  bot.send_message(chat_id=chat_id, text=text_msg)
+
+  bot.send_message(chat_id=chat_id, text="Thanks for using PayMeLah bot to split your bill! To split another bill, use the /splitnewbill to upload a new receipt. 👋🏻 Have a great day, and remember to pay up!")
+
+  # Clear the db for this chat
+  db[chat_id] = {}
 
   return ConversationHandler.END
   
+###################### HELP FUNCTION ##################
+
+def help(update, context):
+  commands={
+  "/start": "Type this command in chat or select it from the pop out menu to start the bot",
+  "/splitnewbill": "Use this after /start or when prompted to prepare the bot to accept a photo of your receipt",
+  "/cancel": "Use this command when your bill has been successfully split. This puts me to sleep. Use /start to wake me up again",
+  "/help": "Brings this message up for future reference"}
+  
+  cmd_list="\n"
+  for i in commands:
+    cmd_list+=f"{i}: {commands[i]}\n"
+  
+  chat_id = update.message.chat.id
+  bot.send_message(
+      chat_id=chat_id,
+      text="I help you split your bills and receipts with just a snap of a photo!\n"+
+      "\nHere's a list of commands I can execute for you:\n"+
+      cmd_list+
+      "\nDon't worry if you can't remember these now, simply typing / in chat will generate a pop out menu with a list of commands for easy reference!"+
+      "\nThanks for using PayMeLah bot and happy splitting!"
+  )
+  return
 
 ###################### MAIN FUNCTION ##################
 
@@ -326,16 +581,17 @@ def main():
 
   # Add conversation handler with the states 
   # The conversation is started with entry_points and proceeded with different states. 
-  #Each of these requires a handler
+  # Each of these requires a handler
   conv_handler = ConversationHandler(
 
-    #We define a CommandHandler called start which is called when user inputs command '/start'
-    entry_points=[CommandHandler('start', start)],
+    entry_points=[CommandHandler('splitnewbill', splitnewbill)],
     states={
-      NEWBILL: [CommandHandler('splitnewbill', callback=splitnewbill)],
       PHOTO: [MessageHandler(Filters.photo, callback=image_handler)],
       PROCESSING: [MessageHandler(Filters.photo, callback=image_error)],
       # EDITING: [MessageHandler(Filters.photo, callback=image_error), MessageHandler(Filters.text), callback=]
+
+      DESCRIPTION: [MessageHandler(Filters.text, callback=description)],
+      PRICE: [MessageHandler(Filters.text, callback=price)]    
     },
     fallbacks=[CommandHandler('cancel', cancel)]
   )
@@ -344,7 +600,8 @@ def main():
   dp.add_handler(conv_handler)
 
   dp.add_handler(CallbackQueryHandler(handle_callback))
-  # dp.add_handler(CommandHandler('start', start))
+  dp.add_handler(CommandHandler('start', start))
+  dp.add_handler(CommandHandler('help', help))
   # dp.add_handler(CommandHandler('splitnewbill', splitnewbill))
   # dp.add_handler(CommandHandler('cancel', cancel))
   # dp.add_handler(MessageHandler(Filters.photo, image_handler))
@@ -352,7 +609,6 @@ def main():
 
   updater.start_polling()
   updater.idle()
-
 
 if __name__ == '__main__':
   main()
