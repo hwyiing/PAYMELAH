@@ -44,7 +44,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 #states must be int
-PHOTO, PROCESSING, MEMBERS, CONFIRMING, ADDING_DESC, ADDING_PRICE, EDITING_DESC, EDITING_PRICE, ADDING_CFM, EDITING_CFM, DELETING = range(11)
+PHOTO, PROCESSING, MEMBERS, CONFIRMING, ADDING_DESC, ADDING_PRICE, EDITING_DESC, EDITING_PRICE, ADDING_CFM, EDITING_CFM, DELETING, SPLITTING = range(12)
 
 ######################### FUNCTIONS ##########################
 
@@ -133,7 +133,7 @@ def image_handler(update: Update, context: CallbackContext):
   return processing(chat_id)
 
 
-def ocr_processing(chat_id):
+def processing(chat_id):
   '''
   Send photo to OCR, retrieve dictionary
   '''
@@ -197,6 +197,8 @@ def getAllMembers(chat_id):
     reply_markup=InlineKeyboardMarkup(buttons)
   )
 
+  return MEMBERS
+
 ######################### CALLBACK QUERY HANDLERS ##############
 
 def membersCallback(update,context):
@@ -237,6 +239,11 @@ def itemsCallback(update, context):
   elif data == ('Delete item'): 
     delete_items(chat_id)
     return DELETING
+  
+  elif data == 'Go to items list':
+    split_bill(chat_id, None)
+    return SPLITTING
+
 
 def deleteCallback(update, context):
   call = update.callback_query
@@ -333,11 +340,7 @@ def handle_callback(update, context):
     exclude_users_from_item(chat_id, int(item_index_str), username, original_msg)
     return
   elif data == 'Calculate bill':
-    calculate(chat_id)
-    return
-  elif data == 'Go to items list':
-    split_bill(chat_id, None)
-    return
+    return calculate(chat_id)
   elif data == 'Back to items list':
     split_bill(chat_id, original_msg.message_id)
     return
@@ -776,6 +779,7 @@ def main():
       EDITING_DESC: [MessageHandler(Filters.text, callback=edit_description)],
       EDITING_PRICE: [MessageHandler(Filters.text, callback=edit_price),],
       DELETING: [CallbackQueryHandler(deleteCallback), MessageHandler(Filters.photo, callback=image_error)],
+      SPLITTING: [CallbackQueryHandler(handle_callback), MessageHandler(Filters.photo, callback=image_error)] 
       },
       
     fallbacks=[CommandHandler('cancel', cancel)]
@@ -783,7 +787,7 @@ def main():
 
  #Attach the conversation handler to the dispatcher
   dp.add_handler(conv_handler)
-  dp.add_handler(CallbackQueryHandler(handle_callback))
+  # dp.add_handler(CallbackQueryHandler(handle_callback))
   dp.add_handler(CommandHandler('start', start))
   dp.add_handler(CommandHandler('help', help))
   # dp.add_handler(CommandHandler('splitnewbill', splitnewbill))
