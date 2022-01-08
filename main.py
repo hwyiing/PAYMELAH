@@ -320,9 +320,14 @@ def handle_callback(update, context):
     item_index_str = data.split(":")[1]
     display_users_for_item(chat_id, int(item_index_str), original_msg)
     return
-  # elif data == 'Finish adding members':
-  #   confirm_items(chat_id)
-  #   return EDITING
+  if data == 'Add new member':
+    logger.info("Buttons Callback - new member called")
+    add_new_member(chat_id, user, original_msg)
+    return MEMBERS
+  elif data == 'Finish adding members':
+    logger.info("Buttons Callback - finished members")
+    confirm_items(chat_id)
+    return CONFIRMING
   elif data.startswith('Edit item '):
     logger.info("EDIT AN ITEM!")
     edit_item(chat_id, original_msg)
@@ -787,7 +792,7 @@ def main():
 
  #Attach the conversation handler to the dispatcher
   dp.add_handler(conv_handler)
-  # dp.add_handler(CallbackQueryHandler(handle_callback))
+  dp.add_handler(CallbackQueryHandler(handle_callback))
   dp.add_handler(CommandHandler('start', start))
   dp.add_handler(CommandHandler('help', help))
   # dp.add_handler(CommandHandler('splitnewbill', splitnewbill))
