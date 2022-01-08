@@ -25,7 +25,7 @@ from telegram.ext import(
 from database import db
 from ocr import get_data
 
-API_KEY = str(os.getenv('API_KEY'))#"5021687305:AAH82QKFwM3_0mx89bo5v8FbuoFfCSsD-5c"
+API_KEY = str(os.getenv('API_KEY'))
 bot = telebot.TeleBot(API_KEY)
 
 bot.set_my_commands([
@@ -212,7 +212,7 @@ def membersCallback(update,context):
   if data == 'Add new member':
     logger.info("Buttons Callback - new member called")
     add_new_member(chat_id, user, original_msg)
-    return
+    return MEMBERS
   elif data == 'Finish adding members':
     logger.info("Buttons Callback - finished members")
     confirm_items(chat_id)
@@ -320,9 +320,9 @@ def handle_callback(update, context):
     item_index_str = data.split(":")[1]
     display_users_for_item(chat_id, int(item_index_str), original_msg)
     return
-  elif data == 'Finish adding members':
-    confirm_items(chat_id)
-    return EDITING
+  # elif data == 'Finish adding members':
+  #   confirm_items(chat_id)
+  #   return EDITING
   elif data.startswith('Edit item '):
     logger.info("EDIT AN ITEM!")
     edit_item(chat_id, original_msg)
@@ -783,7 +783,7 @@ def main():
       },
       
     fallbacks=[CommandHandler('cancel', cancel)]
-  )
+    )
 
  #Attach the conversation handler to the dispatcher
   dp.add_handler(conv_handler)
