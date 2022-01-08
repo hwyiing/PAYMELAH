@@ -83,6 +83,7 @@ def get_data(img):
   all_items=[]
   tax={}
   totals={}
+  max_total=0
   for item in items:
     details = item.split()
     name=""
@@ -102,6 +103,8 @@ def get_data(img):
     if ("tax" in name)or("Tax" in name):
       tax[name]=cost
     elif ("total" in name)or("Total" in name):
+      if float(cost)>maxTotal: # off the assumption that total always > subtotal
+        max_total=float(cost)
       totals[name]=cost
     else:
       all_items.append({'quantity':quantity, 'description':name,'price':cost})
@@ -109,6 +112,7 @@ def get_data(img):
   # Store the results in the dict
   ocr['item']=all_items
   ocr['totals']=totals
+  ocr['total'] = max_total
   ocr['tax']=tax
 
   return ocr
@@ -118,3 +122,5 @@ def get_data(img):
 # bad=r"bad_photo.jpg"
 # good=r"nice_receipt.jpg"
 # print(get_data(good))
+
+
