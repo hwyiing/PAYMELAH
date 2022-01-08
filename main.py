@@ -495,6 +495,8 @@ def calculate(chat_id):
   subtotal = 0.0
   items = db[chat_id]['item']
   for item in items:
+    if item['quantity']==None:
+      continue
     subtotal += float(item['price'])
 
     members_paying = item['members_paying']
