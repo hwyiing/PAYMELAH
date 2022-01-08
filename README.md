@@ -1,6 +1,12 @@
 # PayMELah Telegram Bot
 Hack&Roll 2022 : Hackathon Project
 
+## Video Demo
+https://github.com/hwyiing/PAYMELAH
+
+## Devpost Link
+https://devpost.com/software/paymelah-telebot
+
 ## Inspiration
 Have to work out some crazy math after eating out with your friends? With payMElah, you'll never have to stare at your receipt calculating! Simply send a photo of the receipt to our Telegram bot and let it do your work for you. It's that simple. Settle group payments in a blink of an eye with our Telegram bot, payMElah! 
 
