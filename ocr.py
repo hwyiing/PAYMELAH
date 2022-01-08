@@ -1,10 +1,7 @@
 import cv2
 import numpy as np
 import urllib
-#import cv2.imshow
-
 import pytesseract
-# from pytesseract import Output
 import re
 
 
@@ -52,7 +49,7 @@ def check(s):
 def get_data(img):
   text=process_text(img)
   if text.isspace():
-    return "receipt reading failed"
+    return None
   splits = text.splitlines()
   ocr={}
 
@@ -81,11 +78,15 @@ def get_data(img):
       continue
     else:
       items.append(line)
+  
+  if len(items) == 0:
+    return None
 
 # go through items and create the dictionary
-  all_items={}
+  all_items=[]
   tax={}
   totals={}
+  max_total=0
   for item in items:
     details = item.split()
     name=""
@@ -99,22 +100,30 @@ def get_data(img):
         name+=elem
       elif (check(elem)=="cost")and(cost==None):
         cost=elem
+        if cost[0]=="$":
+          cost=list(cost)[1:]
+          cost="".join(map(str, cost))
     if ("tax" in name)or("Tax" in name):
       tax[name]=cost
     elif ("total" in name)or("Total" in name):
+      if float(cost)>max_total: # off the assumption that total always > subtotal
+        max_total=float(cost)
       totals[name]=cost
     else:
-      all_items[name] = {'quantity':quantity, 'cost':cost}
+      all_items.append({'quantity':quantity, 'description':name,'price':cost})
 
   # Store the results in the dict
   ocr['item']=all_items
   ocr['totals']=totals
+  ocr['total'] = max_total
   ocr['tax']=tax
 
   return ocr
 
 # testing
-normal=r"C:\Users\Rainer\Documents\GitHub\PAYMELAH\user_photo.jpg"
-bad=r"C:\Users\Rainer\Documents\GitHub\PAYMELAH\bad_photo.jpg"
-good=r"C:\Users\Rainer\Documents\GitHub\PAYMELAH\nice_receipt.jpg"
-print(get_data(good))
+# normal=r"user_photo.jpg"
+# bad=r"bad_photo.jpg"
+# good=r"nice_receipt.jpg"
+# print(get_data(good))
+
+

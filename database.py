@@ -10,38 +10,46 @@ db {
   }
 }
 '''
+class database:
+  def __init__(self,db):
+    self.db=db
+  def set_db(self,db):
+    self.db=db
+  def get_db(self):
+    return self.db
 
 db = {
-  44029527 : { # Pegasus on the Fly receipt
-    'item' : [
-      { # item 1
-        'quantity' : 1,
-        'description' : 'Gyros Pita, Fries',
-        'price' : 8.99,
-      },
-      { # item 2
-        'quantity' : 1,
-        'description' : 'Large Soft Drink',
-        'price' : 2.59,
-      },
-      { # item 3
-        'quantity' : 1,
-        'description' : 'Greek Cookies 3pcs',
-        'price' : 2.29,
-      }
-    ],
-    'subtotal' : 13.87,
-    'tax' : 1.68,
-    'total' : 15.55,
+  # -786171741 : { # Pegasus on the Fly receipt
+  #   'item' : [
+  #     { # item 1
+  #       'quantity' : 1,
+  #       'description' : 'Gyros Pita, Fries',
+  #       'price' : 8.99,
+  #     },
+  #     { # item 2
+  #       'quantity' : 1,
+  #       'description' : 'Large Soft Drink',
+  #       'price' : 2.59,
+  #     },
+  #     { # item 3
+  #       'quantity' : 1,
+  #       'description' : 'Greek Cookies 3pcs',
+  #       'price' : 2.29,
+  #     }
+  #   ],
+  #   'subtotal' : 13.87,
+  #   'tax' : 1.68,
+  #   'total' : 15.55,
     # 'individual_bill' : {
     #   'lyntanrambutan' : 0,
     #   'rkambai' : 0,
     #   'clarissajew' : 0,
     #   'cheam99' : 0
     # }
-  }
+  # }
 }
 
+d = database(db)
 '''
 END RESULT
 'individual_bill' : {
